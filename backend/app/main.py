@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -24,15 +25,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(systems_router)
 
     @application.exception_handler(SystemNotFound)
-    async def system_not_found(_request, _error):
+    async def system_not_found(_request: Request, _error: SystemNotFound) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": "Solar system not found"})
 
     @application.exception_handler(StorageUnavailable)
-    async def storage_unavailable(_request, _error):
+    async def storage_unavailable(_request: Request, _error: StorageUnavailable) -> JSONResponse:
         return JSONResponse(
             status_code=503,
             content={"detail": "Local storage is unavailable. Please try again shortly."},
         )
+
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, error: RequestValidationError) -> JSONResponse:
+        # Keep useful field errors without echoing private inputs or non-JSON numeric values.
+        details = [{key: item[key] for key in ("loc", "msg", "type")} for item in error.errors()]
+        return JSONResponse(status_code=422, content={"detail": details})
 
     return application
 

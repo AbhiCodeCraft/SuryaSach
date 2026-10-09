@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from uuid import uuid4
 
@@ -95,6 +96,17 @@ def test_invalid_profiles_rejected_for_create_and_update(client, profile, field,
 def test_future_date_rejected(client, profile):
     profile["install_date"] = (today_in_india() + timedelta(days=1)).isoformat()
     assert client.post("/systems", json=profile).status_code == 422
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_json_numbers_rejected_cleanly(client, profile, value):
+    response = client.post(
+        "/systems",
+        content=json.dumps({**profile, "capacity_kw": value}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "capacity_kw"]
 
 
 def test_today_and_numeric_boundaries_accepted(client, profile):

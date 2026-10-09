@@ -1,1 +1,1 @@
-"""Domain models will be added in later milestones."""
+"""Solar-system domain records, independent of HTTP and persistence."""
