@@ -12,6 +12,7 @@ __pycache__/
 htmlcov/
 coverage/
 *.tsbuildinfo
+frontend/next-env.d.ts
 playwright-report/
 test-results/
 .DS_Store
@@ -19,4 +20,3 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
-
