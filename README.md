@@ -6,17 +6,21 @@ Know what your solar system produced — and what it reasonably should have.
 
 ## Current status
 
-**Milestone 1: Project foundation.** A responsive Next.js home screen calls a real FastAPI
-`GET /health` endpoint and displays Connecting, Connected, or Unavailable, with retry.
-This endpoint checks API reachability only; it does not assess solar performance.
+**Milestone 2: Solar system onboarding.** Create, review, view, and edit rooftop profiles
+through a seven-step mobile-friendly flow. Profiles persist in local SQLite across backend
+restarts. Unknown orientation/tilt and year-only installation timing remain explicit.
+The original live backend health indicator and its tests remain in place.
 
-**NOT YET IMPLEMENTED:** solar-system onboarding, NASA POWER, solar modeling, Textract,
+**NOT YET IMPLEMENTED:** NASA POWER, solar modeling, Textract,
 AWS persistence, user authentication, reports, anomaly detection, or AWS deployment.
 
 ## Architecture and layout
 
 Next.js serves the UI. Browser JavaScript calls FastAPI directly over HTTP; the API
-allows only configured browser origins. No database or external service is required.
+allows only configured browser origins. Python's built-in SQLite provides local storage;
+no separate database installation or external service is required. This is a local, shared
+development workspace with a server-assigned `local-owner`, not authenticated user storage.
+Use test information only and keep the API bound to loopback outside a local container.
 
 ```text
 frontend/       Next.js App Router, TypeScript, Tailwind CSS, browser tests
@@ -28,9 +32,11 @@ backend/        FastAPI, Pydantic settings, pytest, Ruff, Dockerfile
   app/api/      HTTP routes
   app/config/   Environment settings
   app/schemas/  Response models
-  app/models/   Reserved package; no domain implementation yet
-  app/services/ Reserved package; no integrations yet
-  tests/        Health and CORS tests
+  app/models/   Framework-independent solar-system records
+  app/services/ Profile creation/retrieval/update logic
+  app/repositories/ Repository protocol and SQLite adapter
+  data/         Ignored local database, created on first profile access
+  tests/        Health, CORS, profile validation and persistence tests
 docs/           Architecture, calculation principles, verification record
 scripts/        Small development helpers
 ```
@@ -80,6 +86,7 @@ npm run dev
 ```
 
 Open **http://localhost:3000**. The footer should show **Backend: Connected**.
+Choose **Add your solar system**, or open http://localhost:3000/systems to view saved profiles.
 API health: http://localhost:8000/health. Interactive API docs: http://localhost:8000/docs.
 Stop each server with Ctrl+C. No virtual-environment activation or PowerShell policy change is needed.
 
@@ -97,11 +104,12 @@ Backend settings are loaded from `backend/.env`; process environment variables t
 | `API_HOST` | `127.0.0.1` | Bind address for `python -m app` |
 | `API_PORT` | `8000` | API listening port |
 | `CORS_ORIGINS` | `["http://localhost:3000"]` | JSON array of allowed browser origins |
+| `DATABASE_PATH` | Absolute `backend/data/surya-sach.sqlite3` in this checkout | Local development SQLite file; parent directory created automatically |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Frontend's public API address |
 
 Use `localhost:3000` rather than `127.0.0.1:3000`, unless you add that exact origin.
 If Next.js selects another port because 3000 is busy, stop the conflicting process or
-explicitly update CORS. CORS is not authentication; the health endpoint is public.
+explicitly update CORS. CORS is not authentication; all current API endpoints are unauthenticated.
 Frontend `NEXT_PUBLIC_*` values are included in browser bundles: never put secrets there.
 Restart development servers after changing configuration; rebuild the frontend for production changes.
 
@@ -128,7 +136,10 @@ To test the production frontend locally, stop the development server and run `np
 after `npm run build`. With the frontend at localhost:3000 and backend at localhost:8000,
 run `npm run test:e2e` in another frontend terminal. Tests use your installed Edge in
 headless mode at desktop and mobile viewport sizes. They verify real API connectivity,
-loading, failed requests, retry, invalid payloads, timeout, and absence of horizontal overflow.
+loading, failed requests, retry, invalid payloads, timeout, onboarding, validation, editing,
+saved summaries, and absence of horizontal overflow. Onboarding tests create test profiles.
+Use an isolated `DATABASE_PATH` for browser testing to keep them out of your own local data.
+The backend unit tests always use temporary SQLite files.
 No AWS credentials or fabricated solar data are involved.
 
 `scripts/check.ps1` runs backend checks and frontend lint/typecheck/build from any directory.
@@ -139,8 +150,8 @@ It requires dependencies to have been installed first and stops on the first fai
 From the repository root, with Docker Desktop running:
 
 ```powershell
-docker build -t surya-sach-api:milestone1 ./backend
-docker run --rm --name surya-sach-api -p 127.0.0.1:8000:8000 surya-sach-api:milestone1
+docker build -t surya-sach-api:milestone2 ./backend
+docker run --rm --name surya-sach-api -p 127.0.0.1:8000:8000 --mount type=volume,source=surya-sach-data,target=/app/data surya-sach-api:milestone2
 ```
 
 Stop the local Python server first if it uses port 8000. In another terminal:
@@ -155,7 +166,60 @@ and excludes tests, virtual environments, and environment files from its build c
 Pass configuration via `docker run -e VARIABLE=value`; if changing `API_PORT`, change
 the container side of the port mapping too. Do not pass the development `.env` unchanged:
 its loopback `API_HOST` would override the container's bind address.
-Docker Compose adds little value for one container, so it is intentionally omitted.
+The named volume keeps SQLite data across container removal and recreation. Without it,
+data survives a container restart but is lost when the container is removed. The local
+Python database and Docker named volume are independent stores. Docker Compose adds
+little value for one container, so it is intentionally omitted.
+
+## Solar profile API
+
+| Endpoint | Behavior |
+| --- | --- |
+| `POST /systems` | Validate and create; 201 with a Location header |
+| `GET /systems` | List local profiles, newest first |
+| `GET /systems/{system_id}` | Retrieve a profile; 404 if missing |
+| `PUT /systems/{system_id}` | Replace profile details; preserve ID, owner, and creation timestamp |
+| `GET /health` | Existing API reachability response |
+
+Invalid requests return 422 with field/message details; storage failures return 503.
+No private input is echoed in validation errors. Metadata is server-managed. PUT is a full
+replacement: optional fields omitted from a request become null. Concurrent edits are
+last-write-wins in this local prototype. There is no deletion, pagination, or authentication yet.
+
+See [profile conventions](docs/solar-system-profile.md) for fields, limits, unknown values,
+installation precision, and coordinate/angle conventions. Local database files are ignored
+by Git and excluded from Docker builds. Do not commit or share databases containing private data.
+
+## Isolated browser verification
+
+The standard test command uses localhost:3000. To test without touching a server already
+on port 8000, use three terminals. Backend, from `backend/`:
+
+```powershell
+$env:API_PORT = '8002'
+$env:CORS_ORIGINS = '["http://localhost:3001"]'
+$env:DATABASE_PATH = Join-Path (Get-Location) 'data/e2e.sqlite3'
+.venv/Scripts/python.exe -m app
+```
+
+Frontend, from `frontend/` (stop any production frontend before rebuilding):
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8002'
+npm run build
+npm start -- --port 3001
+```
+
+Tests, from `frontend/` in another terminal:
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL = 'http://localhost:3001'
+npm run test:e2e
+```
+
+These environment assignments affect only their terminals. Afterwards, close the test
+terminals and rebuild with `npm run build` in a fresh terminal to restore the default
+production API address. `npm run dev` uses the current environment or `.env.local`.
 
 ## Product principles and future work
 
@@ -164,5 +228,5 @@ preserve assumptions and evidence, and require repeated observations before flag
 persistent anomaly. Generation data alone will not establish a specific hardware fault.
 
 See [architecture](docs/architecture.md), [calculation principles](docs/calculation-method.md),
-and [Milestone 1 verification](docs/milestone-1-verification.md).
-Development stops at this foundation until Milestone 2 is explicitly authorized.
+and [Milestone 2 verification](docs/milestone-2-verification.md).
+Development stops at onboarding until Milestone 3 is explicitly authorized.
