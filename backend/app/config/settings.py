@@ -16,3 +16,4 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
     cors_origins: list[str] = ["http://localhost:3000"]
+    database_path: Path = Path(__file__).resolve().parents[2] / "data" / "surya-sach.sqlite3"
