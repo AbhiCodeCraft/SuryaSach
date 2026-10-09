@@ -169,7 +169,7 @@ def test_response_sentinel_and_zero(query, payload):
     assert result.dni_kwh_m2_day is None
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1, "5.2", True, [], {}])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 10**400, -1, "5.2", True, [], {}])
 def test_invalid_numeric_value(query, payload, value):
     payload["properties"]["parameter"]["ALLSKY_SFC_SW_DWN"]["20250915"] = value
     with pytest.raises(SolarResourceError) as failure:

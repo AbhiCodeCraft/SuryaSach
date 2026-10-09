@@ -54,13 +54,20 @@ def coordinate(value: float) -> str:
 
 
 def number(value: object) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise malformed()
+    try:
+        if not math.isfinite(value):
+            raise malformed()
+    except OverflowError as error:
+        raise malformed() from error
     return float(value)
 
 
 def normalize(payload: object, query: ResourceQuery) -> SolarWeatherDay:
     """Accept only the verified daily RE/LST contract; never infer unknown units."""
+    if not isinstance(payload, dict):
+        raise malformed()
     try:
         header = payload["header"]
         stamp = query.date.strftime("%Y%m%d")
