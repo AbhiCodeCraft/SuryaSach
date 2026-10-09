@@ -22,6 +22,10 @@ export default function Home() {
             <h1 className="text-5xl font-semibold tracking-tight sm:text-7xl">Surya Sach<span className="text-amber-600">.</span></h1>
             <h2 className="mt-6 max-w-xl text-xl leading-relaxed sm:text-2xl">Independent Rooftop Solar Performance Verification</h2>
             <p className="mt-5 max-w-lg text-base leading-7 text-stone-600">Know what your solar system produced — and what it reasonably should have.</p>
+            <div className="mt-7 flex flex-wrap items-center gap-5">
+              <Link href="/systems/new" className="primary-button">Add your solar system</Link>
+              <Link href="/systems" className="text-sm font-semibold underline underline-offset-4">My systems →</Link>
+            </div>
             <div className="mt-10 max-w-lg border-l-2 border-amber-500 pl-5">
               <p className="text-sm font-semibold">Built around evidence. Grounded in context.</p>
               <p className="mt-2 text-sm leading-6 text-stone-600">We’re building an independent way to understand rooftop solar performance, with weather-adjusted expectations and transparent assumptions.</p>
