@@ -1,6 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["external: opt-in live NASA POWER requests (NASA_SMOKE=1)"]
 
 [tool.ruff]
 target-version = "py311"

@@ -4,16 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.health import router
+from app.api.solar_resource import router as solar_resource_router
 from app.api.systems import router as systems_router
 from app.config.settings import Settings
+from app.repositories.solar_resource import MemorySolarResourceCache
 from app.repositories.systems import SQLiteSystemRepository, StorageUnavailable
+from app.services.nasa_power import NasaPowerService, SolarResourceError
 from app.services.systems import SystemNotFound, SystemService
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    application = FastAPI(title=settings.app_name, version="0.2.0")
+    application = FastAPI(title=settings.app_name, version="0.3.0")
     application.state.system_service = SystemService(SQLiteSystemRepository(settings.database_path))
+    application.state.solar_resource_service = NasaPowerService(MemorySolarResourceCache())
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -23,6 +27,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(router)
     application.include_router(systems_router)
+    application.include_router(solar_resource_router)
+
+    @application.exception_handler(SolarResourceError)
+    async def solar_resource_error(_request: Request, error: SolarResourceError) -> JSONResponse:
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"detail": {"code": error.code, "message": str(error)}},
+        )
 
     @application.exception_handler(SystemNotFound)
     async def system_not_found(_request: Request, _error: SystemNotFound) -> JSONResponse:
