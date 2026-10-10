@@ -65,7 +65,7 @@ meteorology commonly lags 2-3 days. These are estimates, not service guarantees.
 Recent DNI/DHI can be missing even when GHI exists, as the live Delhi response
 demonstrated. Never substitute clear-sky data or fabricated weather.
 
-## Intended implementation contract
+## Implemented contract
 
 - Pydantic normalized daily model with provenance, UTC retrieval time, completeness
   status, and missing-field names. Completeness is not a scientific accuracy rating.
@@ -85,6 +85,68 @@ demonstrated. Never substitute clear-sky data or fabricated weather.
   bounded concurrent upstream requests; no immediate retry on 4xx/429. NASA guidance
   recommends at most five concurrent requests; no exact requests/second guarantee
   was found. Avoid bulk repeated requests within the same native source grid.
+
+HTTPX uses a 5-second connect/pool timeout and 20-second read/write inactivity timeout,
+with one retry after 250 ms for network failures/timeouts or upstream 5xx. These are
+per-operation timeouts, not a total wall-clock deadline: DNS and multiple resolved
+addresses may extend elapsed time. At most four requests run upstream per application
+instance; admission waits at most one second. No distributed limit or request coalescing
+is implemented. Deploying many workers requires revisiting this policy.
+
+## HTTP API
+
+- `GET /solar-resource?latitude=28.6139&longitude=77.209&date=2026-06-15`
+- `GET /systems/{system_id}/solar-resource?date=2026-06-15`
+
+The saved-system route loads current persisted coordinates through the existing
+owner-scoped profile service. Editing a location selects a different cache key.
+No weather UI was added in this milestone. OpenAPI is available at `/docs`.
+
+| Result | HTTP status / code |
+| --- | --- |
+| Complete or partial normalized data | 200, `status` describes field completeness |
+| Invalid/missing query, non-finite/out-of-range coordinates, future/unsupported date | 422, existing field-error format |
+| Unknown saved system | 404, existing profile error |
+| GHI date missing, null, or NASA fill value | 404 / `resource_unavailable` |
+| Required GHI parameter omitted entirely | 502 / `missing_required_parameter` |
+| Invalid JSON/shape/numeric range, wrong metadata/units/time standard | 502 / `upstream_invalid_data` |
+| NASA rejects a validated request (including upstream 4xx other than 429) | 502 / `upstream_rejected_request` |
+| Timeout after retry | 504 / `upstream_timeout` |
+| Network failure or upstream 5xx after retry | 503 / `upstream_unavailable` |
+| NASA 429; no automatic retry | 503 / `upstream_rate_limited` |
+| Local upstream concurrency slots exhausted | 503 / `upstream_busy` |
+
+Resource failures have `{"detail":{"code":"...","message":"..."}}`; upstream
+bodies and transport details are not echoed. NASA may reject a date outside its
+current availability with HTTP 422 rather than a fill-valued response; this remains
+an explicit upstream rejection, not a fabricated successful or zero-valued day.
+
+## Running checks
+
+From `backend` in PowerShell:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m ruff format --check .
+.venv/Scripts/python.exe -m pip check
+```
+
+Live tests are skipped unless explicitly enabled. They fail on network errors; they
+never silently skip failed requests or assert fixed historical weather values:
+
+```powershell
+$env:NASA_SMOKE='1'
+$env:NASA_SMOKE_DATE='2026-06-15'
+.venv/Scripts/python.exe -m pytest -m external -q -s
+Remove-Item Env:NASA_SMOKE
+Remove-Item Env:NASA_SMOKE_DATE
+```
+
+Without `NASA_SMOKE_DATE`, the live tests use 30 days before today in India.
+See [Milestone 3 verification](milestone-3-verification.md) for observed values,
+environment-specific network behavior, and Docker commands.
 
 ## Precision and future modeling
 

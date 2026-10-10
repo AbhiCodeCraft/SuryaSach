@@ -1,6 +1,6 @@
 # Architecture
 
-## Implemented through Milestone 2
+## Implemented through Milestone 3
 
 ```text
 Browser <-- HTML / JavaScript -- Next.js (localhost:3000)
@@ -30,8 +30,23 @@ credentials are disabled and GET, POST, and PUT are allowed. No authentication i
 project virtual environment. A Python 3.12 slim container provides the alternate backend
 runtime, with a non-root user and Docker health check. There is no frontend container.
 
-Health means the API can answer requests; it does not probe SQLite. No external APIs or
-solar calculations are implemented. Storage errors on profile requests return a safe 503.
+Health means the API can answer requests; it does not probe SQLite or NASA POWER.
+Storage errors on profile requests return a safe 503. Solar generation calculations
+remain deferred.
+
+## Independent solar resource integration
+
+`/solar-resource` and `/systems/{id}/solar-resource` validate coordinates and dates,
+then call `NasaPowerService`. The latter loads the saved profile first. The service
+uses HTTPX against NASA's fixed HTTPS daily point endpoint, verifies response units
+and metadata, and returns a typed `SolarWeatherDay` rather than upstream dictionaries.
+The [NASA contract](nasa-power.md) documents RE/LST semantics and the hourly upgrade.
+
+The `SolarResourceCache` protocol has a bounded, thread-safe in-memory adapter.
+Resource data is refetched after expiry or process restart; saved profiles continue
+to use SQLite. The upstream concurrency bound and cache are per application instance.
+Expected upstream failures return explicit 502/503/504 errors; missing required daily
+GHI returns 404. Optional missing fields remain null with partial status.
 
 ## Solar-system onboarding
 
@@ -73,7 +88,7 @@ FastAPI / AWS App Runner
    +---- DynamoDB
    +---- S3 (private evidence and reports)
    +---- Textract (OCR candidates; owner confirmation required)
-   +---- NASA POWER (independent solar/weather data)
+   +---- NASA POWER (daily integration exists; hourly adapter remains future)
    |
 Solar Engine -> Analysis Engine -> PDF Reports
 ```

@@ -6,12 +6,18 @@ Know what your solar system produced — and what it reasonably should have.
 
 ## Current status
 
-**Milestone 2: Solar system onboarding.** Create, review, view, and edit rooftop profiles
+**Milestone 3: NASA POWER integration.** The backend retrieves validated daily solar
+and weather resources by coordinates or saved system, with explicit units, local solar
+day semantics, missing-data status, bounded caching, and upstream error handling.
+See the [NASA data contract](docs/nasa-power.md) and
+[verification record](docs/milestone-3-verification.md).
+
+**Milestone 2 remains available:** Create, review, view, and edit rooftop profiles
 through a seven-step mobile-friendly flow. Profiles persist in local SQLite across backend
 restarts. Unknown orientation/tilt and year-only installation timing remain explicit.
 The original live backend health indicator and its tests remain in place.
 
-**NOT YET IMPLEMENTED:** NASA POWER, solar modeling, Textract,
+**NOT YET IMPLEMENTED:** Hourly resource inputs, solar modeling, Textract,
 AWS persistence, user authentication, reports, anomaly detection, or AWS deployment.
 
 ## Architecture and layout
@@ -150,8 +156,8 @@ It requires dependencies to have been installed first and stops on the first fai
 From the repository root, with Docker Desktop running:
 
 ```powershell
-docker build -t surya-sach-api:milestone2 ./backend
-docker run --rm --name surya-sach-api -p 127.0.0.1:8000:8000 --mount type=volume,source=surya-sach-data,target=/app/data surya-sach-api:milestone2
+docker build -t surya-sach-api:milestone3 ./backend
+docker run --rm --name surya-sach-api -p 127.0.0.1:8000:8000 --mount type=volume,source=surya-sach-data,target=/app/data surya-sach-api:milestone3
 ```
 
 Stop the local Python server first if it uses port 8000. In another terminal:
